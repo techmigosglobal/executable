@@ -29,23 +29,35 @@ jobs:
       - name: Build release executable
         shell: pwsh
         run: |
-          $ErrorActionPreference = "Stop"
-          where.exe qmake
-          where.exe mingw32-make
-          qmake -query
-
+          $buildExitCode = 0
           New-Item -ItemType Directory -Force -Path build-win32 | Out-Null
-          Push-Location build-win32
-          qmake ..\RC-MCSimulator.pro -spec win32-g++ "CONFIG+=release"
-          mingw32-make -j2 2>&1 | Tee-Object -FilePath build.log
-          if ($LASTEXITCODE -ne 0) {
-            $tail = Get-Content build.log -Tail 120 | Out-String
-            Write-Error "mingw32-make failed with exit code $LASTEXITCODE.`n$tail"
-            exit $LASTEXITCODE
+          $log = Join-Path (Get-Location) "build-win32\build.log"
+
+          try {
+            where.exe qmake 2>&1 | Tee-Object -FilePath $log
+            where.exe mingw32-make 2>&1 | Tee-Object -FilePath $log -Append
+            qmake -query 2>&1 | Tee-Object -FilePath $log -Append
+
+            Push-Location build-win32
+            qmake ..\RC-MCSimulator.pro -spec win32-g++ "CONFIG+=release" 2>&1 | Tee-Object -FilePath build.log -Append
+            if ($LASTEXITCODE -ne 0) { throw "qmake failed with exit code $LASTEXITCODE" }
+
+            mingw32-make -j2 2>&1 | Tee-Object -FilePath build.log -Append
+            if ($LASTEXITCODE -ne 0) { throw "mingw32-make failed with exit code $LASTEXITCODE" }
+          } catch {
+            $buildExitCode = 1
+            $_ | Out-File -FilePath $log -Append
+          } finally {
+            if ((Get-Location).Path.EndsWith("build-win32")) {
+              Pop-Location
+            }
           }
-          Pop-Location
+
+          "BUILD_EXIT_CODE=$buildExitCode" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Get-Content $log -Tail 120
 
       - name: Package runtime folder
+        if: env.BUILD_EXIT_CODE == '0'
         shell: pwsh
         run: |
           $package = "package\RC-MCSimulator-win32"
@@ -61,12 +73,26 @@ jobs:
           Copy-Item "runsfile" $package -Recurse -ErrorAction SilentlyContinue
 
       - name: Verify executable is 32-bit
+        if: env.BUILD_EXIT_CODE == '0'
         shell: pwsh
         run: |
           python -c "from pathlib import Path; p=Path('package/RC-MCSimulator-win32/RC-MCSimulator.exe').read_bytes(); off=int.from_bytes(p[0x3c:0x40],'little'); machine=int.from_bytes(p[off+4:off+6],'little'); assert machine==0x14c, hex(machine); print('Verified PE32 i386 executable')"
 
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-MCSimulator-build-log
+          path: build-win32/build.log
+
       - name: Upload Windows 32-bit artifact
+        if: env.BUILD_EXIT_CODE == '0'
         uses: actions/upload-artifact@v4
         with:
           name: RC-MCSimulator-win32
           path: package/RC-MCSimulator-win32
+
+      - name: Fail if build failed
+        if: env.BUILD_EXIT_CODE != '0'
+        shell: pwsh
+        run: exit 1
