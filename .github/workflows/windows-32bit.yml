@@ -7,6 +7,10 @@ on:
       - main
       - master
 
+concurrency:
+  group: windows-32bit-build
+  cancel-in-progress: true
+
 jobs:
   build-windows-32bit:
     name: Build Windows 32-bit executable
@@ -17,14 +21,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Qt 5.12.12 MinGW 32-bit
-        shell: pwsh
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install "aqtinstall==3.3.*"
-          python -m aqt install-qt windows desktop 5.12.12 win32_mingw73 -O C:\Qt
-          python -m aqt install-tool windows desktop tools_mingw qt.tools.win32_mingw730 -O C:\Qt
-          "C:\Qt\5.12.12\win32_mingw73\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
-          "C:\Qt\Tools\mingw730_32\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '5.12.12'
+          arch: 'win32_mingw73'
+          tools: 'tools_mingw,qt.tools.win32_mingw730'
+          cache: true
 
       - name: Build release executable
         shell: pwsh
