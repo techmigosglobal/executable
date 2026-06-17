@@ -1,0 +1,16 @@
+debug/
+release/
+build*/
+package/
+*.o
+*.obj
+*.exe
+*.pdb
+moc_*.cpp
+moc_predefs.h
+ui_*.h
+.qmake.stash
+Makefile
+Makefile.*
+object_script.*
+*.pro.user*

@@ -1,0 +1,62 @@
+name: Windows 32-bit Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-windows-32bit:
+    name: Build Windows 32-bit executable
+    runs-on: windows-2022
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Qt 5.12.12 MinGW 32-bit
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "aqtinstall==3.3.*"
+          python -m aqt install-qt windows desktop 5.12.12 win32_mingw73 -O C:\Qt
+          python -m aqt install-tool windows desktop tools_mingw qt.tools.win32_mingw730 -O C:\Qt
+          "C:\Qt\5.12.12\win32_mingw73\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          "C:\Qt\Tools\mingw730_32\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Build release executable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build-win32 | Out-Null
+          Push-Location build-win32
+          qmake ..\RC-MCSimulator.pro -spec win32-g++ "CONFIG+=release"
+          mingw32-make -j2
+          Pop-Location
+
+      - name: Package runtime folder
+        shell: pwsh
+        run: |
+          $package = "package\RC-MCSimulator-win32"
+          New-Item -ItemType Directory -Force -Path $package | Out-Null
+
+          Copy-Item "build-win32\release\RC-MCSimulator.exe" $package
+          windeployqt --release --compiler-runtime "$package\RC-MCSimulator.exe"
+          Copy-Item "ddc\Lib\Win32\Release\emacepl.dll" $package
+
+          Copy-Item "FILE10.DAT" $package -ErrorAction SilentlyContinue
+          Copy-Item "CHECKSUM.txt.txt" $package -ErrorAction SilentlyContinue
+          Copy-Item "MIL_*.txt" $package -ErrorAction SilentlyContinue
+          Copy-Item "runsfile" $package -Recurse -ErrorAction SilentlyContinue
+
+      - name: Verify executable is 32-bit
+        shell: pwsh
+        run: |
+          python -c "from pathlib import Path; p=Path('package/RC-MCSimulator-win32/RC-MCSimulator.exe').read_bytes(); off=int.from_bytes(p[0x3c:0x40],'little'); machine=int.from_bytes(p[off+4:off+6],'little'); assert machine==0x14c, hex(machine); print('Verified PE32 i386 executable')"
+
+      - name: Upload Windows 32-bit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-MCSimulator-win32
+          path: package/RC-MCSimulator-win32
