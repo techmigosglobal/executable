@@ -29,10 +29,20 @@ jobs:
       - name: Build release executable
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          where.exe qmake
+          where.exe mingw32-make
+          qmake -query
+
           New-Item -ItemType Directory -Force -Path build-win32 | Out-Null
           Push-Location build-win32
           qmake ..\RC-MCSimulator.pro -spec win32-g++ "CONFIG+=release"
-          mingw32-make -j2
+          mingw32-make -j2 2>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) {
+            $tail = Get-Content build.log -Tail 120 | Out-String
+            Write-Error "mingw32-make failed with exit code $LASTEXITCODE.`n$tail"
+            exit $LASTEXITCODE
+          }
           Pop-Location
 
       - name: Package runtime folder

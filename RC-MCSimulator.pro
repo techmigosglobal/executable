@@ -18,6 +18,8 @@ SOURCES += main.cpp\
     message.cpp \
     bcthread.cpp \
     rtthread.cpp \
+    swinfo.cpp \
+    swinfo_read.cpp \
 #    scenariogeneration.cpp \
     sgeneration.cpp
 
@@ -29,10 +31,14 @@ HEADERS  += mainwindow.h \
     message.h \
     bcthread.h \
     rtthread.h \
+    swinfo.h \
+    swinfo_read.h \
 #    scenariogeneration.h \
     sgeneration.h
 
-FORMS    += mainwindow.ui
+FORMS    += mainwindow.ui \
+    swinfo.ui \
+    swinfo_read.ui
 
 
 win32 {
